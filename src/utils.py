@@ -1008,7 +1008,7 @@ def detect_language(text):
         return "en"
 
 
-def get_bert_prob(text, model, tokenizer):
+def get_bert_prob(text, model, tokenizer, lang):
     """Mengembalikan skor probabilitas POSITIVE (0.0 - 1.0)."""
     # Pindahkan ke CPU untuk deployment (kecuali server ada GPU)
     # Ini aman untuk Streamlit Cloud/Lokal Laptop biasa
@@ -1022,7 +1022,10 @@ def get_bert_prob(text, model, tokenizer):
         logits = model(**inputs).logits
         probs = F.softmax(logits, dim=1).cpu().numpy()[0]
 
-    return probs[1]  # Probabilitas kelas 1 (Positive)
+    if lang == "en":
+        return probs[1]  # Probabilitas kelas 1
+    elif lang == "id":
+        return probs[0]
 
 
 def get_smart_aspects(segment, lang):
@@ -1046,6 +1049,30 @@ def get_smart_aspects(segment, lang):
                 break  # Cukup 1 trigger per aspek per segmen
 
     return detected
+
+
+def get_global_inference(global_prob, lang):
+    """
+    Fungsi untuk menerima global
+    confidence dan global label
+    """
+    # Menentukan threshold output tergantung bahasa
+    if lang == "en":
+        above_threshold_output = "Positive"
+        below_threshold_output = "Negative"
+    elif lang == "id":
+        above_threshold_output = "Negative"
+        below_threshold_output = "Negative"
+
+    # Mendapatkan global label dan global confidence dari variabel above_threshold_output & below_threshold_output
+    global_label = (
+        above_threshold_output if global_prob > 0.5 else below_threshold_output
+    )
+    global_conf = (
+        global_prob if global_label == above_threshold_output else 1.0 - global_prob
+    )
+
+    return global_label, global_conf
 
 
 def analyze_single_review_complete(text, models_tuple):
@@ -1113,7 +1140,7 @@ def analyze_single_review_complete(text, models_tuple):
             # Preprocess khusus model (pake stemming jika perlu)
             if not seg_clean:
                 seg_clean = seg
-            pos_prob = get_bert_prob(seg, model, tokenizer)
+            pos_prob = get_bert_prob(seg, model, tokenizer, lang)
 
             # Simpan hasil
             for aspect_name, trigger_word in found_aspects:
@@ -1137,24 +1164,21 @@ def analyze_single_review_complete(text, models_tuple):
             trigger_str = ", ".join(triggers)
 
             # Penentuan Label (Threshold 0.5)
-            # Area abu-abu: 0.45 - 0.55 -> Neutral (Optional)
-            # if 0.45 <= avg_prob <= 0.55:
-            #     label = "Neutral/Mixed"
-            #     score = 1.0 - (abs(0.5 - avg_prob) * 2)  # Normalisasi confidencenya
-            if avg_prob > 0.5 and lang == "en":
+            if avg_prob > 0.5:
                 label = "Positive"
                 score = avg_prob
-            elif avg_prob < 0.5 and lang == "en":
+            elif avg_prob < 0.5:
                 label = "Negative"
                 score = 1.0 - avg_prob
-            elif (
-                avg_prob > 0.5 and lang == "id"
-            ):  # Yang bahasa indonesia terbalik sentimenya
-                label = "Negative"
-                score = avg_prob
-            elif avg_prob < 0.5 and lang == "id":
-                label = "Positive"
-                score = 1.0 - avg_prob
+
+            # # Yang bahasa indonesia terbalik sentimenya
+            # elif avg_prob > 0.5 and lang == "id":
+            #     label = "Negative"
+            #     score = avg_prob
+            # elif avg_prob < 0.5 and lang == "id":
+            #     label = "Positive"
+            #     score = 1.0 - avg_prob
+
             final_aspects_output[asp] = {
                 "label": label,
                 "score": score,
@@ -1163,7 +1187,8 @@ def analyze_single_review_complete(text, models_tuple):
 
     # 5. Global Sentiment Prediction (Text Utuh)
     clean_global = clean_text_advanced(text, lang, use_stemming=True)
-    global_prob = get_bert_prob(clean_global, model, tokenizer)
+    global_prob = get_bert_prob(clean_global, model, tokenizer, lang)
+    # global_label, global_conf = get_global_inference(global_prob, lang)
     global_label = "Positive" if global_prob > 0.5 else "Negative"
     global_conf = global_prob if global_label == "Positive" else 1.0 - global_prob
 
