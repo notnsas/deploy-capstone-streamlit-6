@@ -1051,30 +1051,6 @@ def get_smart_aspects(segment, lang):
     return detected
 
 
-def get_global_inference(global_prob, lang):
-    """
-    Fungsi untuk menerima global
-    confidence dan global label
-    """
-    # Menentukan threshold output tergantung bahasa
-    if lang == "en":
-        above_threshold_output = "Positive"
-        below_threshold_output = "Negative"
-    elif lang == "id":
-        above_threshold_output = "Negative"
-        below_threshold_output = "Negative"
-
-    # Mendapatkan global label dan global confidence dari variabel above_threshold_output & below_threshold_output
-    global_label = (
-        above_threshold_output if global_prob > 0.5 else below_threshold_output
-    )
-    global_conf = (
-        global_prob if global_label == above_threshold_output else 1.0 - global_prob
-    )
-
-    return global_label, global_conf
-
-
 def analyze_single_review_complete(text, models_tuple):
     """
     PIPELINE UTAMA ABSA END-TO-END
@@ -1171,14 +1147,6 @@ def analyze_single_review_complete(text, models_tuple):
                 label = "Negative"
                 score = 1.0 - avg_prob
 
-            # # Yang bahasa indonesia terbalik sentimenya
-            # elif avg_prob > 0.5 and lang == "id":
-            #     label = "Negative"
-            #     score = avg_prob
-            # elif avg_prob < 0.5 and lang == "id":
-            #     label = "Positive"
-            #     score = 1.0 - avg_prob
-
             final_aspects_output[asp] = {
                 "label": label,
                 "score": score,
@@ -1188,7 +1156,7 @@ def analyze_single_review_complete(text, models_tuple):
     # 5. Global Sentiment Prediction (Text Utuh)
     clean_global = clean_text_advanced(text, lang, use_stemming=True)
     global_prob = get_bert_prob(clean_global, model, tokenizer, lang)
-    # global_label, global_conf = get_global_inference(global_prob, lang)
+
     global_label = "Positive" if global_prob > 0.5 else "Negative"
     global_conf = global_prob if global_label == "Positive" else 1.0 - global_prob
 
