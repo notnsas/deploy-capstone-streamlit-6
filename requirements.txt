@@ -1,0 +1,15 @@
+streamlit
+tensorflow
+transformers
+torch
+pandas
+numpy
+matplotlib
+seaborn
+nltk
+wordcloud
+Sastrawi
+plotly
+langdetect
+openpyxl
+pyngrok
