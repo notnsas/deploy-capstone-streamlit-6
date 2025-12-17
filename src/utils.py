@@ -353,7 +353,7 @@ ASPECT_KEYWORDS = {
             # Kata Sifat & Gejala (Symptom-based)
             "jernih",
             "bening",
-            "bagus",
+            # "bagus",
             "nendang",
             "mantap",
             "halus",
@@ -1008,7 +1008,7 @@ SLANG_MAP = {
     "layar": "layar",
     "screen": "layar",
     "tampilan": "tampilan",
-    "ui": "tampilan",
+    # "ui": "tampilan",
     "theme": "tema",
     "mode": "mode",
     # --- 7. KATA KERJA UMUM (Verbs) ---
@@ -1617,12 +1617,12 @@ def load_all_models():
     """
     try:
         # Load English Models
-        path_en = "Hamusssss12/spotify-absa-english"
+        path_en = "Hamusssss12/spotify-absa-english-v2"
         tok_bert_en = AutoTokenizer.from_pretrained(path_en)
         mod_bert_en = AutoModelForSequenceClassification.from_pretrained(path_en)
 
         # Load Indonesian Models
-        path_id = "Hamusssss12/spotify-absa-indonesian"
+        path_id = "Hamusssss12/spotify-absa-indonesian-v2"
         tok_bert_id = AutoTokenizer.from_pretrained(path_id)
         mod_bert_id = AutoModelForSequenceClassification.from_pretrained(path_id)
         # Note: LSTM Models kita keep untuk keperluan advanced development/comparison jika perlu

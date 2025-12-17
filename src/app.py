@@ -125,22 +125,25 @@ if "models_loaded" not in st.session_state:
         st.session_state["models_loaded"] = True
     st.toast("✅ Sistem AI Siap Digunakan!", icon="🚀")
 else:
-    # print("else models_en: ")
-    # print(models_en)
     # Ambil dari cache session jika sudah ada
     models_en = st.session_state["models_en"]
     models_id = st.session_state["models_id"]
-# print("models_en: ")
-# print(models_en)
+
+
 # ==========================================
 # 3. SIDEBAR NAVIGASI
 # ==========================================
 with st.sidebar:
-    # Logo Placeholder (Opsional: Jika ada file assets/logo.png)
+    # --- LOGO SECTION ---
+    # Menggunakan URL Logo Spotify Official (Transparan)
+    logo_url = "https://storage.googleapis.com/pr-newsroom-wp/1/2018/11/Spotify_Logo_RGB_Green.png"
+
     try:
-        st.image("assets/logo.png", width=180)
+        # Coba load logo lokal dulu jika ada
+        st.image("assets/logo.png", width=200)
     except:
-        st.write("### 🎧 Spotify Review Intel")
+        # Jika tidak ada file lokal, gunakan URL online
+        st.image(logo_url, width=200)
 
     st.markdown("---")
     st.header("🎛️ Main Menu")
