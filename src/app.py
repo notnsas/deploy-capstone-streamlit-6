@@ -3,6 +3,7 @@ import pandas as pd
 import time
 import utils  # Module custom (Otak pemrosesan)
 import visualizer  # Module custom (Visualisasi grafik)
+import setting  # Module custom (Import global variabel)
 
 # ==========================================
 # 1. KONFIGURASI HALAMAN & TEMA
@@ -325,6 +326,33 @@ elif menu == "📝 Analisis Teks (Single)":
             )
 
         st.caption(f"⏱️ Waktu Pemrosesan: {end_time - start_time:.4f} detik")
+
+    # Tempat penambahan aspek
+    st.subheader("Menambahkan Aspect / Kategori")
+
+    lang_aspect = st.radio(
+        "Pilih bahasa aspek yang ingin diperbarui",
+        [":rainbow[Indonesia]", "***English***"],
+    )
+
+    if lang_aspect:
+        list_aspect = list(setting.ASPECT_KEYWORDS[lang_aspect].keys())
+        mode_aspect = st.radio(
+            "Pilih ingin memilih kategori baru atau kategori lama",
+            list_aspect + ["Custom"],
+        )
+
+        if mode_aspect == "Custom":
+            category = st.text_input("Masukan kategori baru")
+            new_aspect = st.text_input("Masukan aspek baru")
+            setting.ASPECT_KEYWORDS[lang] = {category: [new_aspect]}
+        else:
+            category = mode_aspect
+            new_aspect = st.text_input("Masukan aspek baru")
+            setting.ASPECT_KEYWORDS[lang][category].append(new_aspect)
+        aspek_new = setting.ASPECT_KEYWORDS[lang][category]
+        print(f"{aspek_new}")
+
 
 # ==========================================
 # 6. HALAMAN KETIGA: ANALISIS BATCH (FILE)
