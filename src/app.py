@@ -329,29 +329,34 @@ elif menu == "📝 Analisis Teks (Single)":
 
     # Tempat penambahan aspek
     st.subheader("Menambahkan Aspect / Kategori")
+    with st.expander("Menu", expanded=False):
+        lang_aspect = st.radio(
+            "Pilih bahasa aspek yang ingin diperbarui",
+            ["Indonesia", "English"],
+        )
 
-    lang_aspect = st.radio(
-        "Pilih bahasa aspek yang ingin diperbarui",
-        [":rainbow[Indonesia]", "***English***"],
-    )
-
-    if lang_aspect:
+        # Nentuin kategori dan bahasa aspek
+        lang_aspect = lang_aspect.replace("Indonesia", "id").replace("English", "en")
         list_aspect = list(setting.ASPECT_KEYWORDS[lang_aspect].keys())
         mode_aspect = st.radio(
             "Pilih ingin memilih kategori baru atau kategori lama",
             list_aspect + ["Custom"],
         )
 
+        # Nambahin aspek/kategori baru
         if mode_aspect == "Custom":
             category = st.text_input("Masukan kategori baru")
             new_aspect = st.text_input("Masukan aspek baru")
-            setting.ASPECT_KEYWORDS[lang] = {category: [new_aspect]}
+            btn_add = st.button("Add", type="primary")
+            if btn_add:
+                setting.ASPECT_KEYWORDS[lang_aspect][category] = [new_aspect]
+                st.rerun()
         else:
             category = mode_aspect
             new_aspect = st.text_input("Masukan aspek baru")
-            setting.ASPECT_KEYWORDS[lang][category].append(new_aspect)
-        aspek_new = setting.ASPECT_KEYWORDS[lang][category]
-        print(f"{aspek_new}")
+            btn_add = st.button("Add", type="primary")
+            if btn_add:
+                setting.ASPECT_KEYWORDS[lang_aspect][category].append(new_aspect)
 
 
 # ==========================================
