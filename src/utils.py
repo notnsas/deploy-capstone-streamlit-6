@@ -77,9 +77,25 @@ def normalize_by_prefix(token, keywords):
     """
     Normalisasi dengan prefix, jadi huruf setelah base bakal dihapus
     """
+    norm_token = None
     for kw in keywords:
-        if token.startswith(kw) and token != kw:
-            return kw
+        cond = token.startswith(kw) and token != kw and norm_token == None
+
+        if token.startswith(kw) and token != kw and norm_token == None:
+            print(f"before kw : {kw}")
+            print(f"norm_token : {norm_token}, {cond}")
+            print(f"\nterpisah cond 1\n")
+            norm_token = kw
+            print(f"after norm_token : {norm_token}")
+        elif norm_token:
+            if token.startswith(kw) and token != kw and (len(kw) > len(norm_token)):
+                print(f"before kw : {kw}")
+                print(f"norm_token : {norm_token}, {cond}")
+                print("\n\nbener terjadi cond 2")
+                norm_token = kw
+                print(f"after norm_token : {norm_token}")
+    if norm_token:
+        return norm_token
     return token
 
 
@@ -92,11 +108,12 @@ def normalize_text(text, keywords):
     return " ".join(tokens)
 
 
-def clean_text_advanced(text, lang="en", use_stemming=True):
+def clean_text_advanced(ASPECT_KEYWORDS, text, lang="en", use_stemming=True):
     """Membersihkan teks dengan standar NLP Professional."""
     # Membuat keyword id untuk stemming kata tidak diKBBI
-    KEYWORDS_ID = build_keyword_set(setting.ASPECT_KEYWORDS, "id")
-    KEYWORDS_EN = build_keyword_set(setting.ASPECT_KEYWORDS, "en")
+    KEYWORDS_ID = build_keyword_set(ASPECT_KEYWORDS, "id")
+    KEYWORDS_EN = build_keyword_set(ASPECT_KEYWORDS, "en")
+    KEYWORDS = KEYWORDS_ID.union(KEYWORDS_EN)
 
     if not isinstance(text, str):
         return ""
@@ -135,8 +152,7 @@ def clean_text_advanced(text, lang="en", use_stemming=True):
     # 8. Fix kata yg ga di KBBI
     print(f"Temp text sebelum fix uinya : {text}")
     # text = fix_ui_nya(text)  # Stemming kata ui
-    text = normalize_text(text, KEYWORDS_ID)
-    text = normalize_text(text, KEYWORDS_EN)
+    text = normalize_text(text, KEYWORDS)
 
     print(f"Temp text setelah fix uinya : {text}")
 
@@ -167,7 +183,7 @@ def clean_text_advanced(text, lang="en", use_stemming=True):
         stops = set(stopwords.words("english")) - setting.NEGATION_WORDS
 
     tokens = [t for t in tokens if t not in stops]
-
+    print(" ".join(tokens))
     return " ".join(tokens)
 
 
@@ -241,7 +257,7 @@ def get_bert_prob(text, model, tokenizer, lang):
         return probs[0]  # Probabilitas kelas 0 (Positive)
 
 
-def get_smart_aspects(segment, lang):
+def get_smart_aspects(ASPECT_KEYWORDS, segment, lang):
     """
     Mendeteksi aspek + Mengembalikan kata pemicunya.
     Output: [('Audio', 'suara'), ('Price', 'mahal')]
@@ -250,7 +266,7 @@ def get_smart_aspects(segment, lang):
     text_lower = segment.lower()
 
     # Ambil kamus sesuai bahasa
-    vocab = setting.ASPECT_KEYWORDS.get(lang, setting.ASPECT_KEYWORDS["en"])
+    vocab = ASPECT_KEYWORDS.get(lang, ASPECT_KEYWORDS["en"])
 
     for aspect, keywords in vocab.items():
         for key in keywords:
@@ -264,7 +280,7 @@ def get_smart_aspects(segment, lang):
     return detected
 
 
-def analyze_single_review_complete(text, models_tuple):
+def analyze_single_review_complete(ASPECT_KEYWORDS, text, models_tuple):
     """
     PIPELINE UTAMA ABSA END-TO-END
     Menerima teks -> Cleaning -> Split Segmen -> Deteksi Aspek -> Scoring BERT.
@@ -319,10 +335,10 @@ def analyze_single_review_complete(text, models_tuple):
     # 3. Loop Analisis per Segmen
     for seg in segments:
         print(f"seg : {seg}")
-        seg_clean = clean_text_advanced(seg, lang, use_stemming=True)
+        seg_clean = clean_text_advanced(ASPECT_KEYWORDS, seg, lang, use_stemming=True)
         print(f"seg_clean : {seg_clean}")
         # A. Deteksi Aspek & Trigger
-        found_aspects = get_smart_aspects(seg_clean, lang)
+        found_aspects = get_smart_aspects(ASPECT_KEYWORDS, seg_clean, lang)
         print(f"found_aspects : {found_aspects}")
         if found_aspects:
             # B. Hitung Sentimen Segmen ini
@@ -367,7 +383,7 @@ def analyze_single_review_complete(text, models_tuple):
             }
 
     # 5. Global Sentiment Prediction (Text Utuh)
-    clean_global = clean_text_advanced(text, lang, use_stemming=True)
+    clean_global = clean_text_advanced(ASPECT_KEYWORDS, text, lang, use_stemming=True)
     global_prob = get_bert_prob(clean_global, model, tokenizer, lang)
 
     global_label = "Positive" if global_prob > 0.5 else "Negative"

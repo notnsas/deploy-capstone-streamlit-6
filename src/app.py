@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import time
+import copy
 import utils  # Module custom (Otak pemrosesan)
 import visualizer  # Module custom (Visualisasi grafik)
 import setting  # Module custom (Import global variabel)
@@ -84,6 +85,14 @@ st.markdown(
         border-radius: 8px;
         margin-bottom: 10px;
     }
+    .aspect-card-neutral {
+        background-color: #2b2b2b; /* Abu-abu gelap */
+        border-left: 5px solid #666666; /* Border abu-abu */
+        padding: 15px;
+        border-radius: 8px;
+        margin-bottom: 10px;
+        opacity: 0.7; /* Sedikit transparan agar terlihat inaktif */
+    }
     .trigger-text {
         font-size: 0.85em;
         color: #b3b3b3;
@@ -95,9 +104,12 @@ st.markdown(
 )
 
 # ==========================================
-# 2. INISIALISASI MODEL (CACHING)
+# 2. INISIALISASI MODEL & VARIABLE (CACHING)
 # ==========================================
 # Kita load model di sini agar user melihat loading spinner saat pertama buka
+
+if "ASPECT_KEYWORDS" not in st.session_state:
+    st.session_state["ASPECT_KEYWORDS"] = copy.deepcopy(setting.ASPECT_KEYWORDS)
 
 
 @st.cache_resource
@@ -121,8 +133,6 @@ if "models_loaded" not in st.session_state:
 
         st.session_state["models_en"] = models_en
         st.session_state["models_id"] = models_id
-        # print("loaded models_en: ")
-        # print(models_en)
         st.session_state["models_loaded"] = True
     st.toast("✅ Sistem AI Siap Digunakan!", icon="🚀")
 else:
@@ -152,7 +162,12 @@ with st.sidebar:
     # Navigasi menggunakan Radio Button yang cantik
     menu = st.radio(
         "Pilih Mode Analisis:",
-        ["🏠 Beranda", "📝 Analisis Teks (Single)", "📂 Analisis File (Batch)"],
+        [
+            "🏠 Beranda",
+            "📝 Analisis Teks (Single)",
+            "📂 Analisis File (Batch)",
+            "📚 Dokumentasi & Panduan",
+        ],
         index=0,
     )
 
@@ -234,10 +249,10 @@ elif menu == "📝 Analisis Teks (Single)":
         start_time = time.time()
 
         # Panggil Fungsi Utils (Logic Backend)
-        print("model_en 235")
-        print(models_en)
         global_sentiment, confidence, aspect_results, lang = (
-            utils.analyze_single_review_complete(input_text, (models_en, models_id))
+            utils.analyze_single_review_complete(
+                st.session_state["ASPECT_KEYWORDS"], input_text, (models_en, models_id)
+            )
         )
 
         end_time = time.time()
@@ -260,103 +275,192 @@ elif menu == "📝 Analisis Teks (Single)":
         # Tampilan Aspek Granular (Cards)
         st.subheader("🔍 Breakdown Per Aspek")
 
-        if aspect_results:
-            col_left, col_right = st.columns(2)
+        # ---------------------------------------------------------
+        # LOGIC BARU: Menggabungkan Aspek Terdeteksi & Tidak Terdeteksi
+        # ---------------------------------------------------------
 
-            # Membagi kartu ke 2 kolom agar rapi
-            items = list(aspect_results.items())
-            mid = (len(items) + 1) // 2
+        # 1. Ambil semua kemungkinan aspek untuk bahasa tersebut dari variable global
+        all_possible_aspects = list(st.session_state["ASPECT_KEYWORDS"][lang].keys())
 
-            with col_left:
-                for aspect_name, data in items[:mid]:
-                    # Tentukan warna kartu berdasarkan sentimen aspek
-                    css_class = (
-                        "aspect-card-pos"
-                        if data["label"] == "Positive"
-                        else "aspect-card-neg"
-                    )
-                    score_fmt = f"{data['score']:.1%}"
-                    trigger = (
-                        f"Kata Pemicu: '{data['trigger']}'"
-                        if data["trigger"]
-                        else "Tidak ada keyword spesifik"
-                    )
+        # 2. Siapkan list untuk display
+        display_list = []
 
-                    html_card = f"""
-                    <div class="{css_class}">
-                        <h4 style="margin:0; color:white;">{aspect_name}</h4>
-                        <div style="display:flex; justify-content:space-between; margin-top:5px;">
-                            <span style="font-weight:bold;">{data['label'].upper()}</span>
-                            <span>{score_fmt}</span>
-                        </div>
-                        <div class="trigger-text">{trigger}</div>
-                    </div>
-                    """
-                    st.markdown(html_card, unsafe_allow_html=True)
+        # Masukkan yang TERDETEKSI dulu (agar muncul paling atas)
+        for aspect, data in aspect_results.items():
+            display_list.append({"name": aspect, "data": data, "status": "active"})
 
-            with col_right:
-                for aspect_name, data in items[mid:]:
-                    # Logic yang sama untuk kolom kanan
-                    css_class = (
-                        "aspect-card-pos"
-                        if data["label"] == "Positive"
-                        else "aspect-card-neg"
-                    )
-                    score_fmt = f"{data['score']:.1%}"
-                    trigger = (
-                        f"Kata Pemicu: '{data['trigger']}'"
-                        if data["trigger"]
-                        else "Tidak ada keyword spesifik"
-                    )
+        # Masukkan yang TIDAK TERDETEKSI (sisanya)
+        for aspect in all_possible_aspects:
+            if aspect not in aspect_results:
+                display_list.append(
+                    {"name": aspect, "data": None, "status": "inactive"}
+                )
 
-                    html_card = f"""
-                    <div class="{css_class}">
-                        <h4 style="margin:0; color:white;">{aspect_name}</h4>
-                        <div style="display:flex; justify-content:space-between; margin-top:5px;">
-                            <span style="font-weight:bold;">{data['label'].upper()}</span>
-                            <span>{score_fmt}</span>
-                        </div>
-                        <div class="trigger-text">{trigger}</div>
-                    </div>
-                    """
-                    st.markdown(html_card, unsafe_allow_html=True)
-        else:
-            st.info(
-                "ℹ️ Tidak ditemukan aspek spesifik pada ulasan ini. (Dikategorikan General)"
-            )
+        # ---------------------------------------------------------
+        # RENDERING KARTU
+        # ---------------------------------------------------------
+
+        col_left, col_right = st.columns(2)
+
+        # Bagi list menjadi dua untuk kolom kiri dan kanan
+        mid = (len(display_list) + 1) // 2
+        left_items = display_list[:mid]
+        right_items = display_list[mid:]
+
+        # Fungsi helper untuk render HTML card agar tidak duplikasi kode
+        def render_card(item):
+            aspect_name = item["name"]
+
+            if item["status"] == "active":
+                # Logic untuk aspek yang TERDETEKSI (Warna Warni)
+                data = item["data"]
+                if data["label"] == "Positive":
+                    css_class = "aspect-card-pos"
+                else:
+                    css_class = "aspect-card-neg"
+
+                label_text = data["label"].upper()
+                score_fmt = f"{data['score']:.1%}"
+                trigger_text = (
+                    f"Kata Pemicu: '{data['trigger']}'"
+                    if data["trigger"]
+                    else "Trigger implisit"
+                )
+                text_color = "white"
+
+            else:
+                # Logic untuk aspek yang TIDAK TERDETEKSI (Abu-abu)
+                css_class = "aspect-card-neutral"
+                label_text = "NOT DETECTED"
+                score_fmt = "-"
+                trigger_text = "Tidak ditemukan dalam teks"
+                text_color = "#888"  # Text agak gelap
+
+            return f"""
+            <div class="{css_class}">
+                <h4 style="margin:0; color:{text_color};">{aspect_name}</h4>
+                <div style="display:flex; justify-content:space-between; margin-top:5px;">
+                    <span style="font-weight:bold; color:{text_color};">{label_text}</span>
+                    <span style="color:{text_color};">{score_fmt}</span>
+                </div>
+                <div class="trigger-text">{trigger_text}</div>
+            </div>
+            """
+
+        with col_left:
+            for item in left_items:
+                st.markdown(render_card(item), unsafe_allow_html=True)
+
+        with col_right:
+            for item in right_items:
+                st.markdown(render_card(item), unsafe_allow_html=True)
 
         st.caption(f"⏱️ Waktu Pemrosesan: {end_time - start_time:.4f} detik")
 
-    # Tempat penambahan aspek
-    st.subheader("Menambahkan Aspect / Kategori")
-    with st.expander("Menu", expanded=False):
-        lang_aspect = st.radio(
-            "Pilih bahasa aspek yang ingin diperbarui",
-            ["Indonesia", "English"],
+    # ==========================================
+    # BAGIAN: MANAJEMEN ASPEK (UI IMPROVED)
+    # ==========================================
+    st.divider()
+    st.subheader("⚙️ Konfigurasi Aspek & Keyword")
+
+    with st.expander("🛠️ Buka Panel Manajemen Aspek", expanded=False):
+
+        # 1. Pilih Bahasa (Horizontal agar hemat tempat)
+        st.write("Pilih Bahasa Sasaran:")
+        col_lang, _ = st.columns([1, 2])
+        with col_lang:
+            lang_choice = st.radio(
+                "Bahasa",
+                ["🇮🇩 Indonesia", "🇺🇸 English"],
+                horizontal=True,
+                label_visibility="collapsed",
+            )
+
+        # Mapping bahasa ke kode 'id' atau 'en'
+        target_lang = "id" if "Indonesia" in lang_choice else "en"
+
+        # Ambil data dari Session State (agar update real-time)
+        current_aspects = st.session_state["ASPECT_KEYWORDS"][target_lang]
+
+        # 2. Gunakan Tabs untuk memisahkan mode (UX lebih bersih)
+        tab_add_kw, tab_new_cat = st.tabs(
+            ["➕ Tambah Keyword", "🆕 Buat Kategori Baru"]
         )
 
-        # Nentuin kategori dan bahasa aspek
-        lang_aspect = lang_aspect.replace("Indonesia", "id").replace("English", "en")
-        list_aspect = list(setting.ASPECT_KEYWORDS[lang_aspect].keys())
-        mode_aspect = st.radio(
-            "Pilih ingin memilih kategori baru atau kategori lama",
-            list_aspect + ["Custom"],
-        )
+        # --- TAB 1: Tambah Keyword ke Kategori Ada ---
+        with tab_add_kw:
+            st.caption(
+                "Menambahkan kata pemicu (trigger) baru ke kategori yang sudah ada."
+            )
 
-        # Nambahin aspek/kategori baru
-        if mode_aspect == "Custom":
-            category = st.text_input("Masukan kategori baru")
-            new_aspect = st.text_input("Masukan aspek baru")
-            btn_add = st.button("Add", type="primary")
-            if btn_add:
-                setting.ASPECT_KEYWORDS[lang_aspect][category] = [new_aspect]
-                st.rerun()
-        else:
-            category = mode_aspect
-            new_aspect = st.text_input("Masukan aspek baru")
-            btn_add = st.button("Add", type="primary")
-            if btn_add:
-                setting.ASPECT_KEYWORDS[lang_aspect][category].append(new_aspect)
+            c1, c2 = st.columns(2)
+            with c1:
+                # Selectbox lebih rapi daripada Radio list panjang
+                selected_cat = st.selectbox(
+                    "Pilih Kategori:", list(current_aspects.keys())
+                )
+
+            with c2:
+                new_keyword = st.text_input(
+                    "Keyword Baru:", placeholder="Misal: lelet, lemot"
+                )
+
+            # Tampilkan keyword yang sudah ada (Preview)
+            existing_kws = ", ".join([f"`{k}`" for k in current_aspects[selected_cat]])
+            st.info(f"📂 **Keyword saat ini di '{selected_cat}':**\n\n {existing_kws}")
+
+            if st.button("Simpan Keyword", type="primary"):
+                if new_keyword:
+                    if new_keyword not in current_aspects[selected_cat]:
+                        # Update Session State
+                        st.session_state["ASPECT_KEYWORDS"][target_lang][
+                            selected_cat
+                        ].append(new_keyword)
+
+                        st.toast(
+                            f"✅ Berhasil menambahkan '{new_keyword}' ke {selected_cat}!",
+                            icon="💾",
+                        )
+                        time.sleep(1)  # Beri waktu baca toast
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Keyword tersebut sudah ada.")
+                else:
+                    st.error("❌ Keyword tidak boleh kosong.")
+
+        # --- TAB 2: Buat Kategori Baru ---
+        with tab_new_cat:
+            st.caption(
+                "Membuat aspek penilaian baru (Misal: 'UI/UX', 'Customer Service')."
+            )
+
+            c_cat, c_kw = st.columns(2)
+            with c_cat:
+                new_cat_name = st.text_input(
+                    "Nama Kategori Baru:", placeholder="Misal: Design"
+                )
+            with c_kw:
+                first_kw_input = st.text_input(
+                    "Keyword Pertama:", placeholder="Misal: tampilan, warna"
+                )
+
+            if st.button("Buat Kategori", type="primary"):
+                if new_cat_name and first_kw_input:
+                    if new_cat_name not in current_aspects:
+                        # Update Session State
+                        st.session_state["ASPECT_KEYWORDS"][target_lang][
+                            new_cat_name
+                        ] = [first_kw_input]
+
+                        st.toast(
+                            f"✅ Kategori '{new_cat_name}' berhasil dibuat!", icon="✨"
+                        )
+                        time.sleep(1)
+                        st.rerun()
+                    else:
+                        st.warning("⚠️ Kategori tersebut sudah ada.")
+                else:
+                    st.error("❌ Nama Kategori dan Keyword pertama harus diisi.")
 
 
 # ==========================================
@@ -415,7 +519,9 @@ elif menu == "📂 Analisis File (Batch)":
                         # Analisis
                         gl_lbl, gl_conf, aspects, lang = (
                             utils.analyze_single_review_complete(
-                                text, (models_en, models_id)
+                                st.session_state["ASPECT_KEYWORDS"],
+                                text,
+                                (models_en, models_id),
                             )
                         )
 
@@ -520,6 +626,94 @@ elif menu == "📂 Analisis File (Batch)":
                     file_name=f"absa_result_{int(time.time())}.csv",
                     mime="text/csv",
                 )
+
+
+# ==========================================
+# 7. HALAMAN KEEMPAT: DOKUMENTASI & PANDUAN
+# ==========================================
+elif menu == "📚 Dokumentasi & Panduan":
+    st.title("📚 Dokumentasi & Referensi Sistem")
+    st.markdown(
+        "Panduan lengkap penggunaan aplikasi dan daftar kata kunci (keywords) yang digunakan oleh AI."
+    )
+
+    # Gunakan Tabs untuk memisahkan Panduan dan Daftar Aspek
+    tab_guide, tab_dict = st.tabs(["🚀 Cara Penggunaan", "📖 Kamus Aspek (Live)"])
+
+    # --- TAB 1: PANDUAN PENGGUNAAN ---
+    with tab_guide:
+        st.header("Panduan Penggunaan Aplikasi")
+
+        with st.expander("📝 Cara Melakukan Analisis Teks (Single)", expanded=True):
+            st.markdown(
+                """
+            1. Pergi ke menu **Analisis Teks (Single)** di sidebar.
+            2. Masukkan kalimat ulasan/review pada kolom teks yang tersedia.
+            3. Klik tombol **🔍 Analisis Sekarang**.
+            4. Sistem akan menampilkan:
+               - **Sentimen Global:** Apakah ulasan tersebut secara umum Positif atau Negatif.
+               - **Deteksi Aspek:** AI akan memecah kalimat dan mendeteksi aspek spesifik (misal: Audio, Harga, Iklan).
+            5. Anda juga bisa **menambahkan keyword baru** di bagian bawah halaman hasil analisis jika AI melewatkan sesuatu.
+            """
+            )
+
+        with st.expander("📂 Cara Melakukan Analisis File (Batch)", expanded=True):
+            st.markdown(
+                """
+            1. Siapkan file data dalam format **CSV** atau **Excel (.xlsx)**.
+            2. Pastikan file memiliki kolom teks (misal: `content`, `review`, `text`, atau `ulasan`).
+            3. Pergi ke menu **Analisis File (Batch)**.
+            4. Upload file Anda ke area yang disediakan.
+            5. Klik tombol **⚡ Jalankan Analisis AI**.
+            6. Tunggu proses selesai (Progress bar akan berjalan).
+            7. Lihat **Dashboard Visualisasi** atau download hasil lengkapnya via tombol **Download CSV**.
+            """
+            )
+
+    # --- TAB 2: KAMUS ASPEK (DINAMIS DARI SESSION STATE) ---
+    with tab_dict:
+        st.header("📖 Daftar Keyword & Kategori Aspek")
+        st.info(
+            """
+        Daftar ini diambil secara **Real-Time** dari memori aplikasi. 
+        Jika Anda menambahkan keyword baru melalui menu 'Analisis Teks', keyword tersebut akan langsung muncul di sini.
+        """
+        )
+
+        # Pilihan Bahasa untuk melihat kamus
+        lang_choice_doc = st.radio(
+            "Pilih Bahasa Kamus:", ["🇮🇩 Indonesia", "🇺🇸 English"], horizontal=True
+        )
+
+        # Tentukan target key session state
+        target_lang_doc = "id" if "Indonesia" in lang_choice_doc else "en"
+
+        # Cek apakah session state tersedia
+        if "ASPECT_KEYWORDS" in st.session_state:
+            # Ambil data langsung dari Session State (Bukan dari file setting.py mentah)
+            current_aspects_doc = st.session_state["ASPECT_KEYWORDS"][target_lang_doc]
+
+            # Loop setiap kategori
+            for category, keywords in current_aspects_doc.items():
+                with st.expander(
+                    f"📂 Kategori: **{category}** ({len(keywords)} keywords)"
+                ):
+                    # Tampilkan keywords dalam bentuk tags/code agar rapi
+                    # Mengurutkan keyword agar mudah dibaca
+                    sorted_kws = sorted(keywords)
+
+                    # Tampilkan
+                    st.markdown("Kata kunci pemicu (Triggers):")
+                    content_html = ""
+                    for kw in sorted_kws:
+                        content_html += f"<code style='color: #1DB954; background-color: #191414; border: 1px solid #333; margin: 2px; padding: 2px 6px; border-radius: 4px; display: inline-block;'>{kw}</code> "
+
+                    st.markdown(content_html, unsafe_allow_html=True)
+        else:
+            st.error(
+                "⚠️ Data aspek belum dimuat ke dalam sistem. Silakan muat ulang aplikasi."
+            )
+
 
 # Footer Profesional
 st.markdown("---")
